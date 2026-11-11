@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.local
+.streamlit/
+node_modules/
+.vercel/
+*.csv
+.DS_Store
+Thumbs.db

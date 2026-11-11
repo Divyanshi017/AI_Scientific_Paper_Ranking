@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "functions": {
+    "api/rank.py": { "maxDuration": 60 },
+    "api/answer.py": { "maxDuration": 60 }
+  }
+}
