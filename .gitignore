@@ -1,11 +1,8 @@
+.env
+.venv/
 __pycache__/
 *.py[cod]
-.venv/
-.env
-.env.local
-.streamlit/
-node_modules/
+.pytest_cache/
 .vercel/
-*.csv
 .DS_Store
-Thumbs.db
+.env

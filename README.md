@@ -1,46 +1,96 @@
-# AI Scientific Paper Ranking
+# Research Paper Assistant
 
-Ask a research question → ~50 papers are fetched from OpenAlex, ranked by a **Random Forest**, and a Groq-hosted LLM **answers your question** from the top papers with citations. Static frontend + Python serverless functions — deployable on **Vercel** for free.
+A Python-only frontend built with Plotly Dash, a FastAPI backend, Tavily paper discovery, transparent BM25/Tavily ranking, Groq-powered retrieval-augmented question answering, and temporary in-memory analytics.
 
-## Structure
+## Features
 
+- Search the web for academic-paper candidates using Tavily.
+- Collect results from multiple targeted queries and deduplicate URLs.
+- Extract available title, author, year, abstract/snippet, source URL and page text.
+- Rank results using BM25 text relevance combined with Tavily's relevance score.
+- Display the top five papers and the full retrieved candidate list.
+- Answer questions using retrieved chunks from the top five papers.
+- Track paper-link opens and display overall popularity analytics.
+- Keep search history and analytics in Python memory only.
+
+## Important limitations
+
+1. Tavily is a web discovery service, not a guaranteed scholarly index. Results are academic-paper candidates and should be checked at the source.
+2. Tavily may only extract an abstract, snippet or partial page. The RAG assistant uses the text actually available; it does not claim to have read a full PDF when it could not retrieve one.
+3. Ranking uses BM25 plus Tavily's score. It does not train Random Forest and does not currently use neural embeddings or a Cross-Encoder. This keeps the first Vercel deployment lightweight and avoids pretending a lexical score is semantic understanding.
+4. All data is in process memory. It disappears on restart. On Vercel, separate serverless instances may have separate memory, so analytics and history are not reliable persistent cross-user statistics. Use this version as a prototype only.
+
+## Project structure
+
+```text
+app/
+  main.py
+  config.py
+  api/routes.py
+  frontend/layout.py
+  frontend/components.py
+  frontend/callbacks.py
+  services/tavily_search.py
+  services/paper_ranking.py
+  services/rag.py
+  storage/memory_store.py
+requirements.txt
+.env.example
+vercel.json
 ```
-ai_core.py        fetch + features + Random Forest ranking (used by api/rank.py)
-api/rank.py       POST /api/rank  → 50 ranked papers as JSON
-api/answer.py     POST /api/answer → Groq RAG answer with [1][2] citations (needs GROQ_API_KEY)
-index.html        the whole UI (hero, search, RAG answer, metrics, top 5, 5 charts, CSV)
-style.css         styling (teal gradient hero, cream background, coral accents)
-app.js            frontend logic (fetch, render, Plotly charts, CSV download)
-vercel.json       function config
-```
 
-No build step. No frameworks. One `GROQ_API_KEY` env var.
+## Run locally (Windows PowerShell)
 
-## Run locally
-
-**One command:**
 ```powershell
-python dev_server.py     # website + API on http://localhost:8000 (opens the browser for you)
+py -3.12 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
-Open http://localhost:8000. That's it — one terminal.
 
-Or run `vercel dev` (Vercel CLI) for the exact production setup.
+Open `.env` and add your actual keys:
 
-## Deploy on Vercel (free)
+- `TAVILY_API_KEY`
+- `GROQ_API_KEY`
 
-1. Push this folder to GitHub (check that `.env` is not committed).
-2. https://vercel.com → **Add New → Project** → import the repo. Framework preset: **Other**. Leave everything default.
-3. Add environment variable **`GROQ_API_KEY`** = your free key from https://console.groq.com (Settings → Environment Variables).
-4. Deploy → open the URL → search → click **Generate answer**.
+Then run:
 
-The frontend calls the same-origin `/api/*` routes; no extra config needed on Vercel.
+```powershell
+python -m app.main
+```
 
-## How it works
+Open http://127.0.0.1:8000
 
-1. OpenAlex (~50 papers, de-duplicated) → TF-IDF similarity + citation/recency/length/open-access features → `RandomForestRegressor` trained on a proxy formula → ranking scores → top 5.
-2. Weak supervision by formula — **not** human-labelled relevance. Weakly supervised, not verified usefulness.
-3. The AI answer (RAG) inserts the top papers into a prompt; Groq's `llama-3.1-8b-instant` answers with citations.
+FastAPI documentation is at http://127.0.0.1:8000/docs
 
-## Limitations
+## Deploy to Vercel
 
-Proxy-trained scores; TF-IDF misses synonymy; citations favour older work; open access ≠ quality; ~50 papers is one search sample; the LLM can misread abstracts — verify against the cited papers.
+1. Push this project to a GitHub repository.
+2. Import that repository into Vercel.
+3. Add `TAVILY_API_KEY` and `GROQ_API_KEY` under Project Settings → Environment Variables.
+4. Deploy. Vercel's Python runtime detects the FastAPI ASGI app exported as `app` from `app/main.py`.
+5. Test `/api/health`, `/docs`, the Dash interface, search and RAG.
+
+Do not commit `.env`.
+
+## API endpoints
+
+- `GET /api/health`
+- `POST /api/search` with `{"question": "..."}`
+- `GET /api/history`
+- `GET /api/analytics`
+- `POST /api/papers/{paper_id}/view`
+- `POST /api/chat` with `{"question": "..."}`
+
+## Ranking explanation
+
+The current score is:
+
+`0.60 * normalized_BM25 + 0.40 * Tavily_score`
+
+BM25 measures query-term relevance across title, abstract/snippet and the first part of extracted page text. Tavily's score is the search provider's relevance score. This is a transparent baseline, not a learned quality score. Citation count, abstract length and open-access status are not used to decide relevance.
+
+## Dashboard interpretation
+
+A paper view is counted when its source link is clicked from the app. It is not proof that the external paper page fully loaded or that the visitor read the paper. The dashboard labels this as views/link opens, not verified reading time.
