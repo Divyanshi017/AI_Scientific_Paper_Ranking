@@ -57,11 +57,26 @@ def _passages_block(selected: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def answer_from_papers(question: str) -> dict:
+def _audit_citations(answer: str, max_sources: int) -> dict:
+    """Inspect [S#] markers in the answer. Returns used/invalid lists and a verified flag."""
+    used = sorted({int(marker) for marker in re.findall(r"S(\d+)", answer or "")})
+    valid = [n for n in used if 1 <= n <= max_sources]
+    invalid = [n for n in used if n not in valid]
+    abstains = (answer or "").strip().upper() == ABSTAIN.upper()
+    verified = abstains or (len(valid) > 0 and len(invalid) == 0)
+    return {
+        "verified": verified,
+        "used_citations": valid,
+        "invalid_citations": invalid,
+        "abstains": abstains,
+    }
+
+
+def answer_from_papers(question: str, session_id: str | None = None) -> dict:
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY is missing. Add it to your .env file.")
 
-    latest = get_latest_search()
+    latest = get_latest_search(session_id)
     if not latest or not latest.get("papers"):
         raise ValueError("Search for papers first. The current session has no selected papers.")
 
@@ -98,7 +113,7 @@ def answer_from_papers(question: str) -> dict:
     context_blocks = _passages_block(selected)
     sources = []
     seen_sources = set()
-    for index, item in enumerate(selected, start=1):
+    for item in selected:
         if item["paper_id"] not in seen_sources:
             sources.append({
                 "paper_id": item["paper_id"],
@@ -156,6 +171,17 @@ def answer_from_papers(question: str) -> dict:
     )
 
     final = verified or draft
+    audit = _audit_citations(final, len(selected))
+
+    content_note = (
+        "Two-pass grounding: answers use text Tavily could extract, then a fact-check pass against the same "
+        "passages. A source may provide only an abstract or partial text."
+    )
+    if not audit["verified"] and not audit["abstains"]:
+        content_note += (
+            " The final answer lacks explicit valid citations or references sources that were not retrieved; "
+            "treat its claims with caution."
+        )
 
     return {
         "answer": final,
@@ -163,10 +189,9 @@ def answer_from_papers(question: str) -> dict:
         "model": GROQ_MODEL,
         "sources": sources,
         "retrieved_passages": len(selected),
-        "verified": True,
-        "content_note": (
-            "Answers use the text Tavily could extract from the source pages, "
-            "passed through a strict fact-checking second pass. A source may "
-            "provide only an abstract or partial text."
-        ),
+        "verified": audit["verified"],
+        "used_citations": audit["used_citations"],
+        "invalid_citations": audit["invalid_citations"],
+        "abstains": audit["abstains"],
+        "content_note": content_note,
     }

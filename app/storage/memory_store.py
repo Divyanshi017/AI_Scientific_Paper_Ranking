@@ -1,4 +1,4 @@
-from collections import Counter
+﻿from collections import Counter
 from datetime import datetime, timedelta, timezone
 from threading import RLock
 from uuid import uuid4
@@ -14,6 +14,10 @@ view_events = []
 _current_viewer_id: str | None = None
 
 
+def new_session_id() -> str:
+    return uuid4().hex
+
+
 def current_viewer_id() -> str:
     """Return a stable, anonymized viewer id for this session."""
     global _current_viewer_id
@@ -22,9 +26,10 @@ def current_viewer_id() -> str:
     return _current_viewer_id
 
 
-def save_search(question: str, papers: list[dict]) -> dict:
+def save_search(question: str, papers: list[dict], session_id: str | None = None) -> dict:
     search_id = str(uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    session_id = session_id or "default"
 
     with _lock:
         for paper in papers:
@@ -33,6 +38,7 @@ def save_search(question: str, papers: list[dict]) -> dict:
         record = {
             "search_id": search_id,
             "question": question,
+            "session_id": session_id,
             "created_at": now,
             "paper_count": len(papers),
             "top_paper_ids": [p["paper_id"] for p in papers[:5]],
@@ -48,16 +54,26 @@ def get_papers() -> list[dict]:
         return list(papers_by_id.values())
 
 
-def get_search_history() -> list[dict]:
+def get_search_history(session_id: str | None = None) -> list[dict]:
     with _lock:
-        return list(search_history)
+        if session_id is None:
+            return list(search_history)
+        return [record for record in search_history if record.get("session_id") == session_id]
 
 
-def get_latest_search() -> dict | None:
+def get_latest_search(session_id: str | None = None) -> dict | None:
+    """Latest search for a session (or overall, when session_id is not given)."""
     with _lock:
         if not search_history:
             return None
-        record = dict(search_history[0])
+        record = None
+        for candidate in search_history:
+            if session_id is None or candidate.get("session_id") == session_id:
+                record = candidate
+                break
+        if record is None:
+            return None
+        record = dict(record)
         record["papers"] = [
             papers_by_id[pid]
             for pid in record["top_paper_ids"]
@@ -111,7 +127,6 @@ def analytics_summary(days: int = 14) -> dict:
         my_views = viewer_counts.get(me, 0)
         other_views = sum(v for k, v in viewer_counts.items() if k != me)
 
-        # Paper views split by "me" vs "other people".
         paper_me: dict[str, int] = {}
         paper_others: dict[str, int] = {}
         for event in view_events:
@@ -142,7 +157,6 @@ def analytics_summary(days: int = 14) -> dict:
                     }
                 )
 
-        # All papers with any view counts (by others or by you) for the chart.
         all_paper_ids = set(paper_others) | set(paper_me)
         paper_chart = []
         for paper_id in sorted(

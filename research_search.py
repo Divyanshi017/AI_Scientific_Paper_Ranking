@@ -5,6 +5,14 @@ embed them (sentence-transformer), rank, and show the diverse top 5 and all resu
 Usage:
     py -3.14 research_search.py
 """
+import sys
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 from app.services.tavily_search import search_papers
 from app.services.paper_ranking import rank_papers, select_top_papers
 

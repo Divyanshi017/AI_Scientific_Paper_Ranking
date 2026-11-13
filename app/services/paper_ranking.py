@@ -38,12 +38,20 @@ def _get_embedder():
 
 
 def _vectors(texts: list[str]) -> tuple[np.ndarray, bool]:
-    """Return normalized embedding vectors (dense) and whether semantic embeddings were used."""
-    try:
-        model = _get_embedder()
-        if model is not None:
+    """Return normalized vectors (dense) and whether semantic embeddings were used.
+
+    Order: sentence-transformer -> TF-IDF -> zero matrix. Never raises.
+    """
+    n = len(texts)
+    model = _get_embedder()
+    if model is not None:
+        try:
             arr = model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
-            return arr.astype(float), True
+            return np.asarray(arr, dtype=float), True
+        except Exception:
+            pass
+
+    try:
         matrix = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2),
@@ -51,7 +59,7 @@ def _vectors(texts: list[str]) -> tuple[np.ndarray, bool]:
         ).fit_transform(texts)
         return normalize(matrix).toarray().astype(float), False
     except Exception:
-        return np.zeros((len(texts), 1), dtype=float), False
+        return np.zeros((n, 1), dtype=float), False
 
 
 def select_top_papers(ranked: list[dict], k: int = 5, lambda_: float = 0.75) -> list[dict]:

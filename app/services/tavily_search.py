@@ -27,8 +27,15 @@ BLOCKED_HOSTS = (
 )
 
 DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b", re.I)
+SCHOLARLY_CONTEXT = re.compile(r"journal|proceeding|conference|preprint|volume|issue|published|doi", re.I)
 
 ACADEMIC_DOMAINS = SCHOLARLY_HOSTS  # kept for backward compatibility
+_last_warnings: list[str] = []
+
+
+def fetch_warnings() -> list[str]:
+    """Human-readable notes from the last search (e.g. OpenAlex top-up failure)."""
+    return list(_last_warnings)
 
 
 def _clean_url(url: str) -> str:
@@ -36,14 +43,21 @@ def _clean_url(url: str) -> str:
     return urlunparse((parsed.scheme, parsed.netloc.lower(), parsed.path.rstrip("/"), "", "", ""))
 
 
+def _host_matches(host: str, domain: str) -> bool:
+    host = host[4:] if host.startswith("www.") else host
+    domain = domain[4:] if domain.startswith("www.") else domain
+    return host == domain or host.endswith("." + domain)
+
+
 def _is_academic_candidate(url: str, title: str, content: str) -> bool:
     host = urlparse(url).netloc.lower()
     if any(blocked in host for blocked in BLOCKED_HOSTS):
         return False
-    if any(scholarly in host for scholarly in SCHOLARLY_HOSTS):
+    if any(_host_matches(host, scholarly) for scholarly in SCHOLARLY_HOSTS):
         return True
     text = f"{title} {content[:3000]}"
-    return bool(DOI_PATTERN.search(text))
+    # A DOI only counts as a scholarly signal when the page also looks like a paper context.
+    return bool(DOI_PATTERN.search(text) and SCHOLARLY_CONTEXT.search(text))
 
 
 def _extract_year(text: str):
@@ -99,6 +113,8 @@ def search_papers(question: str) -> list[dict]:
     question = " ".join(question.split())
     if len(question) < 5:
         raise ValueError("Enter a research question with at least 5 characters.")
+
+    _last_warnings.clear()
 
     client = TavilyClient(api_key=TAVILY_API_KEY)
     query_list = _queries(question)
@@ -158,7 +174,7 @@ def search_papers(question: str) -> list[dict]:
             "domain": urlparse(url).netloc.replace("www.", ""),
             "tavily_score": float(item.get("score") or 0.0),
             "views": 0,
-            "academic_check": "SCHOLARLY (host match or DOI) - verify publisher/source",
+            "academic_check": "Scholarly host/DOI match - verify publisher/source",
             "source": "tavily",
         }
 
@@ -177,14 +193,18 @@ def search_papers(question: str) -> list[dict]:
                 papers.append(extra)
                 if len(papers) >= MAX_PAPERS:
                     break
-        except Exception:
-            pass
+        except Exception as error:
+            _last_warnings.append(f"OpenAlex top-up unavailable: {error}")
 
     papers = _dedupe_by_title(papers)
+    if len(papers) < MAX_PAPERS:
+        _last_warnings.append(
+            f"Only {len(papers)} unique papers found (requested {MAX_PAPERS}); results may be shorter than expected."
+        )
 
     if not papers:
         raise RuntimeError(
-            "Tavily did not return identifiable academic-paper candidates. "
+            "No identifiable academic-paper candidates found via Tavily or OpenAlex. "
             "Try a more specific question or include a research topic and method."
         )
 
