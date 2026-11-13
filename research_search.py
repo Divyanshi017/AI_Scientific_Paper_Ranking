@@ -1,12 +1,12 @@
 ﻿"""
 research_search.py - enter a research question, fetch papers (Tavily + OpenAlex),
-embed them (TF-IDF), rank, and show the top 5 and all results.
+embed them (sentence-transformer), rank, and show the diverse top 5 and all results.
 
 Usage:
     py -3.14 research_search.py
 """
 from app.services.tavily_search import search_papers
-from app.services.paper_ranking import rank_papers
+from app.services.paper_ranking import rank_papers, select_top_papers
 
 
 def _print_paper(prefix: str, paper: dict) -> None:
@@ -27,10 +27,11 @@ def main() -> None:
     print(f"\nRetrieved {len(papers)} unique papers for: {question}")
 
     ranked = rank_papers(question, papers)
+    top_5 = select_top_papers(ranked, k=5)
 
-    print("\n=== Top 5 papers ===")
-    for paper in ranked[:5]:
-        _print_paper(str(paper["rank"]), paper)
+    print("\n=== Top 5 papers (diverse selection) ===")
+    for i, paper in enumerate(top_5, start=1):
+        _print_paper(str(i), paper)
         print()
 
     print(f"=== All {len(ranked)} ranked papers ===")

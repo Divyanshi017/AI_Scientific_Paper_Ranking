@@ -8,18 +8,27 @@ from tavily import TavilyClient
 from app.config import MAX_PAPERS, TAVILY_API_KEY, TAVILY_RESULTS_PER_QUERY
 
 
-ACADEMIC_DOMAINS = (
+# Hosts that publish actual scholarly papers (journal, conference, preprint servers).
+SCHOLARLY_HOSTS = (
     "arxiv.org", "openreview.net", "aclanthology.org", "ieeexplore.ieee.org",
-    "dl.acm.org", "link.springer.com", "nature.com", "sciencedirect.com",
-    "journals.plos.org", "pubmed.ncbi.nlm.nih.gov", "biorxiv.org",
-    "medrxiv.org", "papers.ssrn.com", "doi.org", "researchgate.net",
+    "dl.acm.org", "link.springer.com", "nature.com", "science.org",
+    "sciencedirect.com", "journals.plos.org", "pubmed.ncbi.nlm.nih.gov",
+    "biorxiv.org", "medrxiv.org", "papers.ssrn.com", "ssrn.com",
+    "doi.org", "researchgate.net", "onlinelibrary.wiley.com", "pnas.org",
+    "journals.aps.org", "tandfonline.com", "academic.oup.com", "jstor.org",
+    "springer.com", "ncbi.nlm.nih.gov",
 )
 
-ACADEMIC_TERMS = (
-    "abstract", "methodology", "method", "results", "conclusion",
-    "preprint", "journal", "conference", "doi", "research paper",
-    "proceedings", "arxiv",
+# Hosts that are almost never the canonical version of a research paper.
+BLOCKED_HOSTS = (
+    "linkedin.com", "medium.com", "substack.com", "x.com", "twitter.com",
+    "facebook.com", "wordpress.com", "blogspot.com", "tumblr.com", "dev.to",
+    "reddit.com", "youtube.com",
 )
+
+DOI_PATTERN = re.compile(r"\b10\.\d{4,9}/[-._;()/:A-Za-z0-9]+\b", re.I)
+
+ACADEMIC_DOMAINS = SCHOLARLY_HOSTS  # kept for backward compatibility
 
 
 def _clean_url(url: str) -> str:
@@ -29,12 +38,12 @@ def _clean_url(url: str) -> str:
 
 def _is_academic_candidate(url: str, title: str, content: str) -> bool:
     host = urlparse(url).netloc.lower()
-    text = f"{title} {content[:2500]}".lower()
-    return (
-        any(domain in host for domain in ACADEMIC_DOMAINS)
-        or any(term in text for term in ACADEMIC_TERMS)
-        or bool(re.search(r"\b10\.\d{4,9}/[-._;()/:A-Z0-9]+\b", text, re.I))
-    )
+    if any(blocked in host for blocked in BLOCKED_HOSTS):
+        return False
+    if any(scholarly in host for scholarly in SCHOLARLY_HOSTS):
+        return True
+    text = f"{title} {content[:3000]}"
+    return bool(DOI_PATTERN.search(text))
 
 
 def _extract_year(text: str):
@@ -149,7 +158,7 @@ def search_papers(question: str) -> list[dict]:
             "domain": urlparse(url).netloc.replace("www.", ""),
             "tavily_score": float(item.get("score") or 0.0),
             "views": 0,
-            "academic_check": "Candidate - verify publisher/source",
+            "academic_check": "SCHOLARLY (host match or DOI) - verify publisher/source",
             "source": "tavily",
         }
 

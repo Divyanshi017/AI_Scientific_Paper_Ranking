@@ -1,26 +1,28 @@
 ﻿# Research Paper Assistant (Backend)
 
-A Python-only backend: FastAPI, Tavily paper discovery with an OpenAlex scholarly top-up, transparent ranking (TF-IDF embedding similarity + BM25 + Tavily score), Groq-powered retrieval-augmented question answering, and temporary in-memory analytics. No frontend is included in this version; the pipeline is available through the JSON API and the CLI.
+A Python-only FastAPI backend: Tavily paper discovery (strict scholarly filter) with an OpenAlex top-up, transparent ranking (semantic embeddings + BM25 + Tavily score), diversified top-5 selection for RAG, Groq-powered two-pass question answering, and temporary in-memory analytics. No frontend is included in this version.
 
 ## Features
 
 - Search the web for academic-paper candidates using Tavily.
-- If fewer than 50 unique candidates pass the academic filter, top up from OpenAlex (scholarly index).
-- Deduplication by URL and normalized title (publisher/host suffixes are ignored) to avoid duplicates.
-- Extract available title, author, year, abstract/snippet, source URL and page text.
-- Rank using TF-IDF embedding similarity (cosine) combined with BM25 and Tavily's score:
-  `0.40 * embedding + 0.35 * BM25 + 0.25 * Tavily_score`
-- Return the top five papers and the full ranked list of 50.
-- Answer questions using retrieved chunks from the top papers (RAG).
+- Strict filter: a candidate passes only if it comes from a scholarly host (journal, conference, preprint server) or contains an explicit DOI. Non-paper hosts (blogs, social media) are rejected; this avoids «abstract»/«methodology» keyword false positives.
+- If fewer than 50 unique candidates pass, top up from OpenAlex (scholarly index) so every question returns 50 unique papers.
+- Deduplication by URL and normalized title (publisher/host suffixes are ignored).
+- Rank using sentence-transformer semantic similarity (cosine) combined with BM25 and Tavily's score:
+  `0.50 * semantic_embedding + 0.25 * BM25 + 0.25 * Tavily_score`
+  (falls back to TF-IDF embedding similarity if the model cannot load).
+- Top-5 selection is MMR-diversified: high-ranked papers are kept, but near-duplicates are dropped so the chosen five cover different aspects of the question.
+- RAG answers are two-pass: a strict grounded answer followed by a fact-check that strips unsupported claims. If the passages cannot support the answer, the assistant abstains ("The provided papers do not contain enough information to answer this.").
 - Track paper-link opens and display overall popularity analytics.
 - Keep search history and analytics in Python memory only.
 
 ## Important limitations
 
-1. Tavily is a web discovery service, not a guaranteed scholarly index. OpenAlex (when used to top up) is a scholarly index, but retrieved records can still be stale or incomplete. Verify everything at the source.
-2. Tavily may only extract an abstract, snippet or partial page. The RAG assistant uses the text actually available.
-3. Ranking is lexical/vector-free proxy scoring (TF-IDF + BM25 + Tavily score). It does not train a model.
-4. All data is in process memory. It disappears on restart. On Vercel, separate serverless instances may have separate memory, so analytics and history are not reliable persistent cross-user statistics.
+1. Tavily is a web discovery service. The scholarly filter is strict but not infallible; retrieved papers still need verification at the source.
+2. Extracted full text may be only an abstract or snippet. The RAG assistant uses the text actually available.
+3. Semantic ranking is embedding-based relevance, not a guarantee of quality or correctness.
+4. The fact-check pass reduces but cannot eliminate hallucinations; verify against the cited papers.
+5. All data is in process memory. It disappears on restart. On Vercel, separate serverless instances may have separate memory, so analytics and history are not reliable persistent cross-user statistics.
 
 ## Project structure
 

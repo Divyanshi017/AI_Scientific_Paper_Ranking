@@ -1,8 +1,8 @@
-from fastapi import FastAPI, HTTPException
+﻿from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.tavily_search import search_papers
-from app.services.paper_ranking import rank_papers
+from app.services.paper_ranking import rank_papers, select_top_papers
 from app.services.rag import answer_from_papers
 from app.storage import memory_store
 
@@ -29,11 +29,15 @@ def register_api_routes(server: FastAPI) -> None:
         try:
             papers = search_papers(request.question)
             ranked = rank_papers(request.question, papers)
-            history_item = memory_store.save_search(request.question, ranked)
+            # MMR-diverse top 5: accurate relevance, minimal redundancy.
+            top_5 = select_top_papers(ranked, k=5)
+            top_ids = {paper["paper_id"] for paper in top_5}
+            stored = top_5 + [paper for paper in ranked if paper["paper_id"] not in top_ids]
+            history_item = memory_store.save_search(request.question, stored)
             return {
                 "search": history_item,
                 "total_retrieved": len(ranked),
-                "top_5": [public_paper(paper) for paper in ranked[:5]],
+                "top_5": [public_paper(paper) for paper in top_5],
                 "all_papers": [public_paper(paper) for paper in ranked],
             }
         except ValueError as error:

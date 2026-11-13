@@ -1,8 +1,15 @@
+﻿import os
 import re
 
+import numpy as np
 from rank_bm25 import BM25Okapi
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.preprocessing import normalize
+
+_embedder = None
+_embedder_loaded = False
+_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 
 def tokenize(text: str) -> list[str]:
@@ -17,25 +24,80 @@ def _paper_text(paper: dict) -> str:
     ]).strip()
 
 
-def _embedding_scores(question: str, docs: list[str]) -> list[float]:
-    """TF-IDF embeddings of the paper texts vs the question (cosine similarity)."""
+def _get_embedder():
+    """Load the sentence-transformer lazily. Falls back to TF-IDF if unavailable."""
+    global _embedder, _embedder_loaded
+    if not _embedder_loaded:
+        _embedder_loaded = True
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedder = SentenceTransformer(_EMBED_MODEL)
+        except Exception:
+            _embedder = None
+    return _embedder
+
+
+def _vectors(texts: list[str]) -> tuple[np.ndarray, bool]:
+    """Return normalized embedding vectors (dense) and whether semantic embeddings were used."""
     try:
-        vectorizer = TfidfVectorizer(
+        model = _get_embedder()
+        if model is not None:
+            arr = model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
+            return arr.astype(float), True
+        matrix = TfidfVectorizer(
             stop_words="english",
             ngram_range=(1, 2),
             max_features=3000,
-        )
-        matrix = vectorizer.fit_transform(docs + [question])
-        similarity = cosine_similarity(matrix[:-1], matrix[-1]).ravel().clip(0, 1)
-        return [float(value) for value in similarity]
-    except ValueError:
-        return [0.0 for _ in docs]
+        ).fit_transform(texts)
+        return normalize(matrix).toarray().astype(float), False
+    except Exception:
+        return np.zeros((len(texts), 1), dtype=float), False
+
+
+def select_top_papers(ranked: list[dict], k: int = 5, lambda_: float = 0.75) -> list[dict]:
+    """
+    MMR-style selection for the top-k: keeps high ranking_score papers but drops
+    near-duplicates, so the chosen papers cover different aspects of the question.
+    """
+    if len(ranked) <= k:
+        return list(ranked)
+
+    docs = [_paper_text(paper) for paper in ranked]
+    vectors, _ = _vectors(docs)
+    similarities = vectors @ vectors.T
+
+    chosen: list[int] = []
+    chosen_set: set[int] = set()
+
+    seed = max(
+        range(len(ranked)),
+        key=lambda i: (float(ranked[i].get("ranking_score", 0.0)), float(ranked[i].get("tavily_score", 0.0))),
+    )
+    chosen.append(seed)
+    chosen_set.add(seed)
+
+    while len(chosen) < k:
+        best_index, best_mmr = None, -10 ** 9
+        for i in range(len(ranked)):
+            if i in chosen_set:
+                continue
+            redundancy = float(np.max(similarities[i, chosen])) if chosen else 0.0
+            mmr = (
+                lambda_ * float(ranked[i].get("ranking_score", 0.0))
+                - (1 - lambda_) * redundancy
+            )
+            if mmr > best_mmr:
+                best_mmr, best_index = mmr, i
+        chosen.append(best_index)
+        chosen_set.add(best_index)
+
+    return [ranked[i] for i in chosen]
 
 
 def rank_papers(question: str, papers: list[dict]) -> list[dict]:
     """
-    Rank papers by combining TF-IDF embedding similarity (semantic relevance),
-    BM25 keyword relevance, and Tavily's search score.
+    Rank papers with semantic embeddings (sentence-transformer when available,
+    TF-IDF otherwise), BM25 keyword relevance and Tavily's search score.
     """
     if not papers:
         return []
@@ -60,16 +122,25 @@ def rank_papers(question: str, papers: list[dict]) -> list[dict]:
     else:
         normalized_bm25 = [(value - low) / (high - low) for value in raw_scores]
 
-    embedding_scores = _embedding_scores(question, docs_text)
+    vectors, semantic = _vectors(docs_text + [question])
+    embedding_scores = [float(np.clip(value, 0.0, 1.0)) for value in (vectors[:-1] @ vectors[-1])]
+
+    if semantic:
+        embedding_weight, bm25_weight = 0.50, 0.25
+        embedding_note = "semantic embeddings"
+    else:
+        embedding_weight, bm25_weight = 0.40, 0.35
+        embedding_note = "TF-IDF embeddings (sentence transformer unavailable)"
+    tavily_weight = 1.0 - embedding_weight - bm25_weight
 
     for index, paper in enumerate(papers):
         tavily_score = max(0.0, min(1.0, float(paper.get("tavily_score", 0.0))))
         bm25_score = normalized_bm25[index]
         embedding_score = embedding_scores[index]
         final_score = (
-            0.40 * embedding_score
-            + 0.35 * bm25_score
-            + 0.25 * tavily_score
+            embedding_weight * embedding_score
+            + bm25_weight * bm25_score
+            + tavily_weight * tavily_score
         )
 
         paper["embedding_score"] = round(embedding_score, 4)
@@ -77,7 +148,7 @@ def rank_papers(question: str, papers: list[dict]) -> list[dict]:
         paper["ranking_score"] = round(final_score, 4)
         paper["rank"] = 0
         paper["ranking_explanation"] = (
-            "Combined TF-IDF embedding similarity, keyword relevance (BM25) "
+            f"Combined {embedding_note} similarity, keyword relevance (BM25) "
             "and Tavily's search relevance score."
         )
 
