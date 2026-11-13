@@ -1,4 +1,4 @@
-import re
+﻿import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from hashlib import sha1
 from urllib.parse import urlparse, urlunparse
@@ -60,6 +60,27 @@ def _queries(question: str) -> list[str]:
         f"{question} academic study journal conference paper",
         f"{question} site:arxiv.org OR site:openreview.net",
     ]
+
+
+def _title_stem(title: str) -> str:
+    # Drop site/publisher suffixes so the same paper on different hosts matches.
+    head = title.split("|")[0]
+    head = re.split(r"\s+[-–—]\s+", head)[0]
+    return head.strip()
+
+
+def _norm_title(title: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", _title_stem(title).lower())
+
+
+def _dedupe_by_title(papers: list[dict]) -> list[dict]:
+    best = {}
+    for paper in papers:
+        key = _norm_title(paper.get("title", "")) or paper.get("paper_id") or sha1(str(paper).encode()).hexdigest()
+        current = best.get(key)
+        if current is None or (paper.get("tavily_score", 0.0), len(paper.get("full_text", ""))) > (current.get("tavily_score", 0.0), len(current.get("full_text", ""))):
+            best[key] = paper
+    return list(best.values())
 
 
 def search_papers(question: str) -> list[dict]:
@@ -128,10 +149,30 @@ def search_papers(question: str) -> list[dict]:
             "domain": urlparse(url).netloc.replace("www.", ""),
             "tavily_score": float(item.get("score") or 0.0),
             "views": 0,
-            "academic_check": "Candidate — verify publisher/source",
+            "academic_check": "Candidate - verify publisher/source",
+            "source": "tavily",
         }
 
-    papers = list(unique.values())
+    papers = _dedupe_by_title(list(unique.values()))
+    seen_titles = {_norm_title(paper["title"]) for paper in papers}
+
+    if len(papers) < MAX_PAPERS:
+        # Top up from OpenAlex so every question returns exactly MAX_PAPERS unique candidates.
+        try:
+            from app.services.openalex_search import search_papers_openalex
+            for extra in search_papers_openalex(question, limit=MAX_PAPERS):
+                key = _norm_title(extra["title"])
+                if not key or key in seen_titles:
+                    continue
+                seen_titles.add(key)
+                papers.append(extra)
+                if len(papers) >= MAX_PAPERS:
+                    break
+        except Exception:
+            pass
+
+    papers = _dedupe_by_title(papers)
+
     if not papers:
         raise RuntimeError(
             "Tavily did not return identifiable academic-paper candidates. "
