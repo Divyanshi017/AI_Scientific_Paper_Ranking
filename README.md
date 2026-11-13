@@ -2,6 +2,8 @@
 
 A Python-only FastAPI app with a minimal built-in web UI (served at `/`): Tavily paper discovery (strict scholarly filter), transparent ranking (semantic embeddings + BM25 + Tavily score), diversified top-5 selection for RAG, Groq-powered two-pass question answering, and temporary in-memory analytics scoped per API session.
 
+![Zenshin start screen](docs/screenshots/home.png)
+
 ## Features
 
 - Search the web for academic-paper candidates using Tavily.
