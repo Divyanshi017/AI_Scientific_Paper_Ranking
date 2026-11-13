@@ -1,6 +1,6 @@
 ﻿"""
-research_search.py - enter a research question, fetch papers (Tavily + OpenAlex),
-embed them (sentence-transformer), rank, and show the diverse top 5 and all results.
+research_search.py - enter a research question, fetch papers (Tavily),
+embed them (fastembed), rank, and show the diverse top 5 and all results.
 
 Usage:
     py -3.14 research_search.py

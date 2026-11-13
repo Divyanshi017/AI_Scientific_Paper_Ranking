@@ -34,7 +34,7 @@ _last_warnings: list[str] = []
 
 
 def fetch_warnings() -> list[str]:
-    """Human-readable notes from the last search (e.g. OpenAlex top-up failure)."""
+    """Human-readable notes from the last search (currently none are produced)."""
     return list(_last_warnings)
 
 
@@ -179,32 +179,10 @@ def search_papers(question: str) -> list[dict]:
         }
 
     papers = _dedupe_by_title(list(unique.values()))
-    seen_titles = {_norm_title(paper["title"]) for paper in papers}
-
-    if len(papers) < MAX_PAPERS:
-        # Top up from OpenAlex so every question returns exactly MAX_PAPERS unique candidates.
-        try:
-            from app.services.openalex_search import search_papers_openalex
-            for extra in search_papers_openalex(question, limit=MAX_PAPERS):
-                key = _norm_title(extra["title"])
-                if not key or key in seen_titles:
-                    continue
-                seen_titles.add(key)
-                papers.append(extra)
-                if len(papers) >= MAX_PAPERS:
-                    break
-        except Exception as error:
-            _last_warnings.append(f"OpenAlex top-up unavailable: {error}")
-
-    papers = _dedupe_by_title(papers)
-    if len(papers) < MAX_PAPERS:
-        _last_warnings.append(
-            f"Only {len(papers)} unique papers found (requested {MAX_PAPERS}); results may be shorter than expected."
-        )
 
     if not papers:
         raise RuntimeError(
-            "No identifiable academic-paper candidates found via Tavily or OpenAlex. "
+            "No identifiable academic-paper candidates found via Tavily. "
             "Try a more specific question or include a research topic and method."
         )
 

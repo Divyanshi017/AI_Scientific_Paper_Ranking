@@ -1,18 +1,21 @@
-﻿# Research Paper Assistant (Backend)
+# Zenshin — Research Paper Assistant
 
-A Python-only FastAPI backend: Tavily paper discovery (strict scholarly filter) with an OpenAlex top-up, transparent ranking (semantic embeddings + BM25 + Tavily score), diversified top-5 selection for RAG, Groq-powered two-pass question answering, and temporary in-memory analytics scoped per API session. No frontend is included in this version.
+A Python-only FastAPI app with a minimal built-in web UI (served at `/`): Tavily paper discovery (strict scholarly filter), transparent ranking (semantic embeddings + BM25 + Tavily score), diversified top-5 selection for RAG, Groq-powered two-pass question answering, and temporary in-memory analytics scoped per API session.
 
 ## Features
 
 - Search the web for academic-paper candidates using Tavily.
 - Strict filter: a candidate passes only if its host is a scholarly publisher/conference/preprint server (exact or sub-domain) or it contains an explicit DOI alongside paper-style context (journal/proceedings/preprint/volume/etc.). Blogs and social hosts are rejected to avoid false academic matches.
-- If fewer than 50 unique candidates pass, top up from OpenAlex (scholarly index) so every question returns 50 unique papers. Missing/unavailable OpenAlex degrades gracefully and surfaces a `fetch_warnings` note instead of silently returning fewer papers.
+- Finds the most relevant scholarly papers for each question (usually 10–40 pass the filter; `MAX_PAPERS`, default 50, is only an upper cap) and answers from the best 5.
 - Deduplication by URL and normalized title (publisher/host suffixes are ignored).
-- Rank using sentence-transformer semantic similarity (cosine) combined with BM25 and Tavily's score:
+- Rank using fastembed semantic similarity (cosine, `all-MiniLM-L6-v2` via ONNX, no PyTorch) combined with BM25 and Tavily's score:
   `0.50 * semantic_embedding + 0.25 * BM25 + 0.25 * Tavily_score`
   (falls back to TF-IDF embedding similarity if the model cannot load; ranking still works, just without semantic signal).
+  The model (~90 MB) is downloaded from Hugging Face on the first search and cached in the system temp folder (`fastembed_cache`). Set `EMBEDDING_MODEL` to use another fastembed model.
 - Top-5 selection is MMR-diversified: high-ranked papers are kept, but near-duplicates are dropped so the chosen five cover different aspects of the question.
 - RAG answers are two-pass: a strict grounded answer followed by a fact-check that strips unsupported claims. Citation audit: answers contain `verified`, `used_citations` and `invalid_citations` instead of an unconditional "verified" flag.
+- Answers are written in ASD-STE100 Simplified Technical English (short sentences, one idea each, active voice, simple words); both passes carry the STE rules and the fact-check pass also edits for STE.
+- Answers stream: `POST /api/chat/stream` returns newline-delimited JSON events (`meta`, `status` drafting/checking, `delta` text, then `done` with the full result or `error`). Only the fact-checked pass streams, so the text shown is the final checked text. `POST /api/chat` still returns the whole answer at once.
 - If the passages cannot support the answer, the assistant abstains ("The provided papers do not contain enough information to answer this.").
 - Track paper-link opens and display overall popularity analytics.
 - Search sessions are isolated: `POST /api/search` accepts an optional `X-Session-Id` header; RAG reads only the caller's last search.
@@ -33,7 +36,6 @@ app/
   config.py
   api/routes.py
   services/tavily_search.py
-  services/openalex_search.py
   services/paper_ranking.py
   services/rag.py
   storage/memory_store.py
@@ -60,8 +62,6 @@ Open `.env` and add your actual keys:
 
 - `TAVILY_API_KEY`
 - `GROQ_API_KEY`
-
-Optional: `OPENALEX_MAILTO` (OpenAlex politeness contact; defaults to a placeholder).
 
 Then run:
 
