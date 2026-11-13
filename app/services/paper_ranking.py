@@ -9,7 +9,7 @@ from sklearn.preprocessing import normalize
 
 _embedder = None
 _embedder_loaded = False
-_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+_EMBED_MODEL = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 
 def tokenize(text: str) -> list[str]:
@@ -25,13 +25,13 @@ def _paper_text(paper: dict) -> str:
 
 
 def _get_embedder():
-    """Load the sentence-transformer lazily. Falls back to TF-IDF if unavailable."""
+    """Load the fastembed (ONNX) model lazily. Falls back to TF-IDF if unavailable."""
     global _embedder, _embedder_loaded
     if not _embedder_loaded:
         _embedder_loaded = True
         try:
-            from sentence_transformers import SentenceTransformer
-            _embedder = SentenceTransformer(_EMBED_MODEL)
+            from fastembed import TextEmbedding
+            _embedder = TextEmbedding(model_name=_EMBED_MODEL)
         except Exception:
             _embedder = None
     return _embedder
@@ -40,14 +40,14 @@ def _get_embedder():
 def _vectors(texts: list[str]) -> tuple[np.ndarray, bool]:
     """Return normalized vectors (dense) and whether semantic embeddings were used.
 
-    Order: sentence-transformer -> TF-IDF -> zero matrix. Never raises.
+    Order: fastembed -> TF-IDF -> zero matrix. Never raises.
     """
     n = len(texts)
     model = _get_embedder()
     if model is not None:
         try:
-            arr = model.encode(texts, normalize_embeddings=True, convert_to_numpy=True)
-            return np.asarray(arr, dtype=float), True
+            arr = np.asarray(list(model.embed(texts)), dtype=float)
+            return normalize(arr), True
         except Exception:
             pass
 
@@ -104,7 +104,7 @@ def select_top_papers(ranked: list[dict], k: int = 5, lambda_: float = 0.75) -> 
 
 def rank_papers(question: str, papers: list[dict]) -> list[dict]:
     """
-    Rank papers with semantic embeddings (sentence-transformer when available,
+    Rank papers with semantic embeddings (fastembed when available,
     TF-IDF otherwise), BM25 keyword relevance and Tavily's search score.
     """
     if not papers:
@@ -138,7 +138,7 @@ def rank_papers(question: str, papers: list[dict]) -> list[dict]:
         embedding_note = "semantic embeddings"
     else:
         embedding_weight, bm25_weight = 0.40, 0.35
-        embedding_note = "TF-IDF embeddings (sentence transformer unavailable)"
+        embedding_note = "TF-IDF embeddings (semantic model unavailable)"
     tavily_weight = 1.0 - embedding_weight - bm25_weight
 
     for index, paper in enumerate(papers):

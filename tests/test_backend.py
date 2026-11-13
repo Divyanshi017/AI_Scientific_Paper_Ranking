@@ -4,7 +4,6 @@ import numpy as np
 
 from app.services import paper_ranking
 from app.services.tavily_search import _is_academic_candidate
-from app.services.openalex_search import _reconstruct_abstract
 from app.services.rag import _chunk_text, _audit_citations, ABSTAIN
 
 
@@ -21,11 +20,6 @@ def test_blog_domains_rejected_even_with_doi_look():
 def test_doi_requires_paper_context():
     assert not _is_academic_candidate("https://example.com/blog/post", "t", "no markers here")
     assert _is_academic_candidate("https://example.com/blog/post", "t", "Published in journal; doi: 10.1038/xyz")
-
-
-def test_reconstruct_abstract():
-    inverted = {"hello": [0], "world": [1], "friend": [2]}
-    assert _reconstruct_abstract(inverted) == "hello world friend"
 
 
 def test_chunk_text_overlap():

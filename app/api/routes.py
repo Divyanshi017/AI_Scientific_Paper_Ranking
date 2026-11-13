@@ -1,9 +1,12 @@
-﻿from fastapi import FastAPI, HTTPException, Request
+﻿import json
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.services.tavily_search import search_papers, fetch_warnings
 from app.services.paper_ranking import rank_papers, select_top_papers
-from app.services.rag import answer_from_papers
+from app.services.rag import answer_from_papers, prepare_answer, stream_answer_events
 from app.storage import memory_store
 
 
@@ -80,3 +83,23 @@ def register_api_routes(server: FastAPI) -> None:
             raise HTTPException(status_code=503, detail=str(error))
         except Exception as error:
             raise HTTPException(status_code=502, detail=f"RAG request failed: {error}")
+
+    @server.post("/api/chat/stream")
+    def chat_stream(request: ChatRequest, raw: Request):
+        """Stream the answer as newline-delimited JSON events (meta, status, delta, done | error)."""
+        try:
+            ctx = prepare_answer(request.question, session_id=_session_id(raw))
+        except ValueError as error:
+            raise HTTPException(status_code=400, detail=str(error))
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail=str(error))
+
+        def lines():
+            for event in stream_answer_events(ctx):
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+
+        return StreamingResponse(
+            lines(),
+            media_type="application/x-ndjson",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )

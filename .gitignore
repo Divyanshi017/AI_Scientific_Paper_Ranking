@@ -5,4 +5,6 @@ __pycache__/
 .pytest_cache/
 .vercel/
 .DS_Store
-.env                
+
+# Local Claude Code / editor settings
+.claude/

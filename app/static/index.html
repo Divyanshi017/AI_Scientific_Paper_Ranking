@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zenshin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="frame">
+    <!-- Decorative sky: mountain ranges and cloud banks, drawn in SVG. -->
+    <div class="scenery" aria-hidden="true">
+      <svg viewBox="0 0 1440 600" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="g-far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dcd9ee"/><stop offset="1" stop-color="#efeef7"/></linearGradient>
+          <linearGradient id="g-mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b2acd8"/><stop offset=".75" stop-color="#dcd9ef"/></linearGradient>
+          <linearGradient id="g-near" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a39cce"/><stop offset=".8" stop-color="#d4d1ea"/></linearGradient>
+          <linearGradient id="g-mist" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".9"/></linearGradient>
+          <!-- rough ridge edges plus soft mottled rock texture -->
+          <filter id="f-rock" x="-5%" y="-10%" width="110%" height="120%">
+            <feTurbulence type="fractalNoise" baseFrequency=".035 .09" numOctaves="3" seed="4" result="edge"/>
+            <feDisplacementMap in="SourceGraphic" in2="edge" scale="9" xChannelSelector="R" yChannelSelector="G" result="shape"/>
+            <feTurbulence type="fractalNoise" baseFrequency=".018 .03" numOctaves="4" seed="11" result="grain"/>
+            <feColorMatrix in="grain" type="matrix" values="0 0 0 0 .45  0 0 0 0 .42  0 0 0 0 .68  .9 0 0 0 -.38" result="streaks"/>
+            <feComposite in="streaks" in2="shape" operator="in" result="tex"/>
+            <feMerge><feMergeNode in="shape"/><feMergeNode in="tex"/></feMerge>
+          </filter>
+          <filter id="f-snow" x="-10%" y="-10%" width="120%" height="130%">
+            <feTurbulence type="fractalNoise" baseFrequency=".08" numOctaves="2" seed="5"/>
+            <feDisplacementMap in="SourceGraphic" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+          <filter id="f-cloud" x="-20%" y="-60%" width="140%" height="220%">
+            <feTurbulence type="fractalNoise" baseFrequency=".007 .02" numOctaves="4" seed="7"/>
+            <feDisplacementMap in="SourceGraphic" scale="80" xChannelSelector="R" yChannelSelector="G"/>
+            <feGaussianBlur stdDeviation="4"/>
+          </filter>
+          <filter id="f-soft" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="22"/></filter>
+        </defs>
+
+        <!-- far range -->
+        <path fill="url(#g-far)" filter="url(#f-rock)" opacity=".85" d="M0 350L90 322L160 336L240 296L310 314L370 288L440 312L530 276L610 302L700 268L770 290L850 298L930 272L1010 300L1090 282L1170 306L1250 286L1330 312L1440 296V600H0Z"/>
+        <rect y="300" width="1440" height="120" fill="url(#g-mist)" filter="url(#f-soft)"/>
+
+        <!-- middle range with snow-capped peaks -->
+        <g filter="url(#f-rock)">
+          <path fill="url(#g-mid)" d="M0 432L90 402L170 416L260 372L330 390L420 330L470 355L520 346L600 386L680 362L760 320L860 250L930 300L990 290L1060 340L1140 322L1220 360L1300 346L1440 380V600H0Z"/>
+          <path fill="#8f88bf" opacity=".3" d="M860 250L930 300L960 296L905 345L880 300ZM420 330L470 355L452 386L432 352ZM760 320L800 300L770 352Z"/>
+        </g>
+        <g fill="#fff" filter="url(#f-snow)">
+          <path opacity=".95" d="M860 250L828 272L841 275L849 287L858 277L867 291L878 280L898 277Z"/>
+          <path opacity=".85" d="M420 330L394 348L404 350L412 360L421 351L430 358L437 348L446 343Z"/>
+          <path opacity=".7" d="M990 290L974 301L984 303L992 311L1000 301L1011 305Z"/>
+        </g>
+        <rect y="368" width="1440" height="110" fill="url(#g-mist)" filter="url(#f-soft)"/>
+
+        <!-- clouds drifting between ranges -->
+        <g fill="#fff" opacity=".85" filter="url(#f-cloud)">
+          <ellipse cx="560" cy="418" rx="180" ry="26"/>
+          <ellipse cx="1040" cy="408" rx="200" ry="28"/>
+          <ellipse cx="170" cy="434" rx="160" ry="24"/>
+          <ellipse cx="1330" cy="420" rx="130" ry="20"/>
+        </g>
+
+        <!-- near range -->
+        <path fill="url(#g-near)" filter="url(#f-rock)" d="M0 482L60 456L120 466L200 410L250 440L300 430L360 466L440 482L520 472L600 488L700 480L800 490L900 478L980 484L1060 466L1140 450L1190 430L1240 404L1290 436L1340 426L1440 456V600H0Z"/>
+        <g fill="#fff" opacity=".8" filter="url(#f-snow)">
+          <path d="M200 410L185 421L194 423L200 432L207 423L215 425Z"/>
+          <path d="M1240 404L1223 416L1233 418L1240 427L1247 418L1257 419Z"/>
+        </g>
+
+        <!-- cloud bank: lavender undersides, then white billows -->
+        <g fill="#d6d3e9" filter="url(#f-cloud)">
+          <ellipse cx="90" cy="590" rx="270" ry="92"/>
+          <ellipse cx="400" cy="610" rx="310" ry="96"/>
+          <ellipse cx="740" cy="598" rx="330" ry="92"/>
+          <ellipse cx="1080" cy="610" rx="310" ry="96"/>
+          <ellipse cx="1370" cy="590" rx="270" ry="92"/>
+          <ellipse cx="250" cy="530" rx="180" ry="40"/>
+          <ellipse cx="990" cy="534" rx="220" ry="42"/>
+        </g>
+        <g fill="#fff" filter="url(#f-cloud)">
+          <ellipse cx="250" cy="514" rx="190" ry="46"/>
+          <ellipse cx="620" cy="528" rx="210" ry="50"/>
+          <ellipse cx="990" cy="518" rx="230" ry="50"/>
+          <ellipse cx="1290" cy="506" rx="180" ry="46"/>
+          <ellipse cx="90" cy="572" rx="270" ry="88"/>
+          <ellipse cx="400" cy="592" rx="310" ry="90"/>
+          <ellipse cx="740" cy="580" rx="330" ry="88"/>
+          <ellipse cx="1080" cy="592" rx="310" ry="90"/>
+          <ellipse cx="1370" cy="572" rx="270" ry="88"/>
+        </g>
+        <g fill="#fff" filter="url(#f-cloud)">
+          <circle cx="140" cy="500" r="46"/><circle cx="330" cy="492" r="40"/><circle cx="520" cy="506" r="52"/>
+          <circle cx="720" cy="512" r="44"/><circle cx="890" cy="498" r="50"/><circle cx="1100" cy="494" r="44"/>
+          <circle cx="1230" cy="486" r="38"/><circle cx="1390" cy="494" r="48"/>
+        </g>
+
+        <!-- white fade at the side edges -->
+        <g fill="#fff" filter="url(#f-soft)" opacity=".9">
+          <ellipse cx="-30" cy="420" rx="150" ry="260"/>
+          <ellipse cx="1470" cy="420" rx="150" ry="260"/>
+        </g>
+      </svg>
+    </div>
+
+    <header class="topbar">
+      <div class="brand"><em>Zen</em>shin</div>
+      <button id="reset" class="ghost-btn" type="button" hidden>New search</button>
+    </header>
+
+    <main id="main" class="main is-empty">
+      <section class="hero" id="hero">
+        <h1>
+          <span class="hero-line">Hi there,
+            <span class="tile" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22"><path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7.5 3.5zM14 3.5V8h4M9 12h6M9 15.5h4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </span>
+          <span class="hero-line hero-soft">What are you researching today?</span>
+        </h1>
+        <p class="hero-sub">Zenshin finds scholarly papers and answers your question from the 5 most relevant, with citations.</p>
+      </section>
+
+      <section id="thread" class="thread" aria-live="polite"></section>
+
+      <form id="composer" class="composer" autocomplete="off">
+        <div class="composer-top">
+          <div class="mode" id="mode" role="radiogroup" aria-label="Mode" hidden>
+            <button type="button" role="radio" data-mode="search" aria-checked="false">Search papers</button>
+            <button type="button" role="radio" data-mode="chat" aria-checked="true">Ask the top 5</button>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="input" id="input-label" class="field-label">Research question</label>
+            <textarea id="input" rows="1" placeholder="Ask a research question…" maxlength="500"></textarea>
+          </div>
+          <button id="send" class="send" type="submit" aria-label="Search">
+            <span class="send-text">Search</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="chips" id="chips">
+          <span class="chips-label">Try</span>
+          <button type="button" class="chip example">Transformers for protein folding</button>
+          <button type="button" class="chip example">Effects of microplastics on soil health</button>
+        </div>
+        <p id="error" class="error" role="alert" hidden></p>
+      </form>
+    </main>
+
+    <footer class="sources-strip">
+      <span class="strip-label">Searching papers from</span>
+      <ul>
+        <li>arXiv</li><li>PubMed</li><li>Nature</li><li>IEEE Xplore</li><li>ACM DL</li><li>OpenReview</li>
+      </ul>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
