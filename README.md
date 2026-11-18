@@ -79,27 +79,3 @@ Or run the CLI, which asks for your research question and prints the ranked pape
 py -3.12 research_search.py
 ```
 
-Run tests with:
-
-```powershell
-python -m pytest tests
-```
-
-## Deploy to Vercel
-
-1. Push this project to a GitHub repository.
-2. Import that repository into Vercel.
-3. Add `TAVILY_API_KEY` and `GROQ_API_KEY` under Project Settings -> Environment Variables.
-4. Deploy. Vercel's Python runtime detects the FastAPI ASGI app exported as `app` from `app/main.py`.
-5. Test `/api/health`, `/docs`, `/api/search`, `/api/chat`.
-
-Do not commit `.env`.
-
-## API endpoints
-
-- `GET /api/health`
-- `POST /api/search` with `{"question": "..."}` — returns `top_5`, `all_papers`, `session_id`, `fetch_warnings`
-- `GET /api/history` — scoped to the caller's `X-Session-Id`
-- `GET /api/analytics`
-- `POST /api/papers/{paper_id}/view`
-- `POST /api/chat` with `{"question": "..."}` — answers scoped to the caller's last search for that `X-Session-Id`
